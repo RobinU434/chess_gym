@@ -60,7 +60,7 @@ class ChessEnv(gym.Env):
     def _get_piece_configuration(self):
         piece_map = np.zeros(64)
 
-        for square, piece in zip(env.board.piece_map().keys(), env.board.piece_map().values()):
+        for square, piece in zip(self.board.piece_map().keys(), self.board.piece_map().values()):
             piece_map[square] = piece.piece_type * (piece.color * 2 - 1)
 
         return piece_map.reshape((8, 8))
