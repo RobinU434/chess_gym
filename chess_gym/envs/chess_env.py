@@ -69,7 +69,7 @@ class ChessEnv(gym.Env):
         observation = (self._get_image() if self.observation_mode == 'rgb_array' else self._get_piece_configuration())
         return observation
 
-    def _action_to_move(self, action):
+    def _action_to_move(self, action): 
         from_square = chess.Square(action[0])
         to_square = chess.Square(action[1])
         promotion = (None if action[2] == 0 else chess.Piece(chess.PieceType(action[2])), chess.Color(action[4]))
