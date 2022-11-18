@@ -10,6 +10,8 @@ from io import BytesIO
 import cairosvg
 from PIL import Image
 
+from sklearn.preprocessing import OneHotEncoder
+
 class MoveSpace:
     def __init__(self, board):
         self.board = board
@@ -24,24 +26,13 @@ class ChessEnv(gym.Env):
     def __init__(self, render_size=512, observation_mode='rgb_array', claim_draw=True, **kwargs):
         super(ChessEnv, self).__init__()
 
-        if observation_mode == 'rgb_array':
-            self.observation_space = spaces.Box(low = 0, high = 255,
-                                                shape = (render_size, render_size, 3),
-                                                dtype = np.uint8)
-        elif observation_mode == 'piece_map':
-            self.observation_space = spaces.Box(low = -6, high = 6,
-                                                shape = (8, 8),
-                                                dtype = np.uint8)
-        else:
-            raise Exception("observation_mode must be either rgb_array or piece_map")
-
+        self.observation_space = self._get_observation_space(observation_mode, render_size)
         self.observation_mode = observation_mode
+        self.onehot_encoder = OneHotEncoder(sparse=False)
 
         self.chess960 = kwargs['chess960']
-        self.board = chess.Board(chess960 = self.chess960)
-
-        if self.chess960:
-            self.board.set_chess960_pos(np.random.randint(0, 960))
+        
+        self.board = self._setup_board(self.chess960)
 
         self.render_size = render_size
         self.claim_draw = claim_draw
@@ -50,6 +41,26 @@ class ChessEnv(gym.Env):
 
         self.action_space = MoveSpace(self.board)
 
+
+    def _setup_board(chess960):
+        board = chess.Board(chess960 = chess960)
+
+        if chess960:
+            board.set_chess960_pos(np.random.randint(0, 960))
+
+        return board
+            
+    def _get_observation_space(self, observation_mode, render_size):
+
+        observation_spaces = {  'rgb_array': spaces.Box(low = 0, high = 255,
+                                                shape = (render_size, render_size, 3),
+                                                dtype = np.uint8),
+                                'piece_map': spaces.Box(low = 0, high = 1,
+                                                shape = (8, 8, 12),
+                                                dtype = np.uint)}
+
+        return observation_spaces[observation_mode], 
+    
     def _get_image(self):
         out = BytesIO()
         bytestring = chess.svg.board(self.board, size = self.render_size).encode('utf-8')
@@ -57,17 +68,51 @@ class ChessEnv(gym.Env):
         image = Image.open(out)
         return np.asarray(image)
 
-    def _get_piece_configuration(self):
+    def linear_encoder(x):
+        """pass through functions
+
+        Args:
+            x (any): object to pass through
+
+        Returns:
+            any:
+        """
+        return x
+    
+    def one_hot(self, x: np.array):
+        """returns one hot encoded matrix of game board
+
+        Args:
+            x (np.array): game board with shape 8x8
+
+        Returns:
+            np.array: one hot encoded game board with shape (8x8x13)
+        """
+        x = x.reshape(64, 1)  # board size is constant
+        x = self.onehot_encoder.fit_transform(x)  # one hot encoding
+        return x.reshape(8, 8, 13)  # reshape into board shape 
+
+    def _get_piece_configuration(self, encoding: str="one_hot"):
         piece_map = np.zeros(64)
 
         for square, piece in zip(self.board.piece_map().keys(), self.board.piece_map().values()):
             piece_map[square] = piece.piece_type * (piece.color * 2 - 1)
 
+        piece_map = piece_map.reshape(8, 8)
+        
+        encoding_dict = {   "linear": self.linear_encoder,
+                            "one_hot": self.one_hot}
+        
+        # encoding
+        piece_map = encoding_dict[encoding](piece_map)
+
         return piece_map.reshape((8, 8))
 
+    
     def _observe(self):
-        observation = (self._get_image() if self.observation_mode == 'rgb_array' else self._get_piece_configuration())
-        return observation
+        observation_dict = {"linear": self._get_image,
+                            "one_hot": self._get_piece_configuration}
+        return observation_dict[self.observation_mode]()
 
     def _action_to_move(self, action): 
         from_square = chess.Square(action[0])
