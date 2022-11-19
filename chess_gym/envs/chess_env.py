@@ -12,13 +12,15 @@ from PIL import Image
 
 from sklearn.preprocessing import OneHotEncoder
 
+from .observation_space import ChessSpace
+
 class MoveSpace:
     def __init__(self, board):
         self.board = board
 
     def sample(self):
         return np.random.choice(list(self.board.legal_moves))
-    
+ 
 class ChessEnv(gym.Env):
     """Chess Environment"""
     metadata = {'render.modes': ['rgb_array', 'human'], 'observation.modes': ['rgb_array', 'piece_map']}
@@ -31,7 +33,7 @@ class ChessEnv(gym.Env):
         self.onehot_encoder = OneHotEncoder(sparse=False)
 
         self.chess960 = kwargs['chess960']
-        
+
         self.board = self._setup_board(self.chess960)
 
         self.render_size = render_size
@@ -39,9 +41,10 @@ class ChessEnv(gym.Env):
 
         self.viewer = None
 
-        self.action_space = MoveSpace(self.board)
+        self.action_space = spaces.Discrete(64 * 64)  # each number represents the transition from a sqaure to another square
+        self.observation_space = ChessSpace(board=self.board)
 
-
+    @staticmethod
     def _setup_board(chess960):
         board = chess.Board(chess960 = chess960)
 
@@ -106,9 +109,8 @@ class ChessEnv(gym.Env):
         # encoding
         piece_map = encoding_dict[encoding](piece_map)
 
-        return piece_map.reshape((8, 8))
+        return piece_map
 
-    
     def _observe(self):
         observation_dict = {"linear": self._get_image,
                             "one_hot": self._get_piece_configuration}
