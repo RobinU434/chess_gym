@@ -1,3 +1,4 @@
+from typing import Tuple
 import gym
 from gym import spaces
 
@@ -11,6 +12,7 @@ import cairosvg
 from PIL import Image
 
 from sklearn.preprocessing import OneHotEncoder
+import torch
 
 from .observation_space import ChessSpace
 
@@ -25,13 +27,13 @@ class ChessEnv(gym.Env):
     """Chess Environment"""
     metadata = {'render.modes': ['rgb_array', 'human'], 'observation.modes': ['rgb_array', 'piece_map']}
 
-    def __init__(self, render_size=512, observation_mode='rgb_array', claim_draw=True, chess960:bool = False, **kwarg):
+    def __init__(self, render_size=512, board_encoding='rgb_array', claim_draw=True, chess960:bool = False, action_encoding_method = "action_wise", **kwarg):
         super(ChessEnv, self).__init__()
 
-        self.observation_space = self._get_observation_space(observation_mode, render_size)
-        self.observation_mode = observation_mode
+        self.action_encoding_method = action_encoding_method
+        self.board_enccoding = board_encoding
+        self.observation_space = self._get_observation_space(render_size)
         self.onehot_encoder = OneHotEncoder(sparse=False)
-
         self.chess960 = chess960
 
         self.board = self._setup_board(self.chess960)
@@ -42,7 +44,7 @@ class ChessEnv(gym.Env):
         self.viewer = None
 
         self.action_space = spaces.Discrete(64 * 64)  # each number represents the transition from a sqaure to another square
-        self.observation_space = ChessSpace(board=self.board, observation_mode=observation_mode)
+        self.observation_space = ChessSpace(board=self.board, observation_mode=board_encoding)
 
     @staticmethod
     def _setup_board(chess960):
@@ -53,7 +55,7 @@ class ChessEnv(gym.Env):
 
         return board
             
-    def _get_observation_space(self, observation_mode, render_size):
+    def _get_observation_space(self, render_size):
 
         observation_spaces = {  'rgb_array': spaces.Box(low = 0, high = 255,
                                                 shape = (render_size, render_size, 3),
@@ -62,7 +64,7 @@ class ChessEnv(gym.Env):
                                                 shape = (8, 8, 12),
                                                 dtype = np.uint)}
 
-        return observation_spaces[observation_mode], 
+        return observation_spaces[self.board_enccoding], 
     
     def _get_image(self):
         out = BytesIO()
@@ -111,7 +113,7 @@ class ChessEnv(gym.Env):
 
         return piece_map
 
-    def _observe(self, encoding: str = "one_hot"):
+    def _observe(self, encoding: str = "one_hot") -> Tuple[torch.Tensor, torch.Tensor]:
         # return board state
         observation_dict = {"linear": self._get_image,
                             "one_hot": self._get_piece_configuration}
@@ -119,10 +121,12 @@ class ChessEnv(gym.Env):
         # return legal moves 
         legal_moves = list(self.board.legal_moves)
         legal_moves = list(map(lambda x: str(x), legal_moves))  # convert move object into uci move str
+        # encode legal moves
+        legal_moves = self.observation_space.one_hot_encoding(legal_moves)
         
         return observation_dict[encoding](), legal_moves
 
-    def _convert_action(self, action):
+    def _strToAction(self, action):
         if type(action) == str:
             # only accept uci format e.g.: e3e4
             assert action[0] in "abcdefgh"
@@ -148,9 +152,9 @@ class ChessEnv(gym.Env):
         drop = (0 if move.drop is None else move.drop)
         return [from_square, to_square, promotion, drop]
 
-    def step(self, action):
+    def step(self, action) -> Tuple[Tuple[torch.Tensor, torch.Tensor], float, bool, dict]:
         # convert action in as str into move object
-        action = self._convert_action(action)
+        action = self._strToAction(action)
         self.board.push(action)
 
         observation = self._observe()
@@ -167,7 +171,7 @@ class ChessEnv(gym.Env):
 
         return observation, reward, terminal, info
 
-    def reset(self):
+    def reset(self) -> Tuple[torch.Tensor, torch.Tensor]:
         self.board.reset()
 
         if self.chess960:
