@@ -25,14 +25,14 @@ class ChessEnv(gym.Env):
     """Chess Environment"""
     metadata = {'render.modes': ['rgb_array', 'human'], 'observation.modes': ['rgb_array', 'piece_map']}
 
-    def __init__(self, render_size=512, observation_mode='rgb_array', claim_draw=True, **kwargs):
+    def __init__(self, render_size=512, observation_mode='rgb_array', claim_draw=True, chess960:bool = False, **kwarg):
         super(ChessEnv, self).__init__()
 
         self.observation_space = self._get_observation_space(observation_mode, render_size)
         self.observation_mode = observation_mode
         self.onehot_encoder = OneHotEncoder(sparse=False)
 
-        self.chess960 = kwargs['chess960']
+        self.chess960 = chess960
 
         self.board = self._setup_board(self.chess960)
 
@@ -42,7 +42,7 @@ class ChessEnv(gym.Env):
         self.viewer = None
 
         self.action_space = spaces.Discrete(64 * 64)  # each number represents the transition from a sqaure to another square
-        self.observation_space = ChessSpace(board=self.board)
+        self.observation_space = ChessSpace(board=self.board, observation_mode=observation_mode)
 
     @staticmethod
     def _setup_board(chess960):
@@ -111,10 +111,27 @@ class ChessEnv(gym.Env):
 
         return piece_map
 
-    def _observe(self):
+    def _observe(self, encoding: str = "one_hot"):
+        # return board state
         observation_dict = {"linear": self._get_image,
                             "one_hot": self._get_piece_configuration}
-        return observation_dict[self.observation_mode]()
+        
+        # return legal moves 
+        legal_moves = list(self.board.legal_moves)
+        legal_moves = list(map(lambda x: str(x), legal_moves))  # convert move object into uci move str
+        
+        return observation_dict[encoding](), legal_moves
+
+    def _convert_action(self, action):
+        if type(action) == str:
+            # only accept uci format e.g.: e3e4
+            assert action[0] in "abcdefgh"
+            assert int(action[1]) in [1, 2, 3, 4, 5, 6, 7, 8] 
+            assert action[2] in "abcdefgh"
+            assert int(action[3]) in [1, 2, 3, 4, 5, 6, 7, 8]
+
+            # convert action 
+            return chess.Move.from_uci(action)
 
     def _action_to_move(self, action): 
         from_square = chess.Square(action[0])
@@ -132,6 +149,8 @@ class ChessEnv(gym.Env):
         return [from_square, to_square, promotion, drop]
 
     def step(self, action):
+        # convert action in as str into move object
+        action = self._convert_action(action)
         self.board.push(action)
 
         observation = self._observe()
