@@ -1,6 +1,8 @@
+import gym 
 import random
 from typing import List, Optional, Tuple
 from gym import spaces
+from progress.bar import Bar
 
 import chess
 import chess.svg
@@ -11,7 +13,7 @@ import torch
 
 class ChessSpace(spaces.Space):
     def __init__(   self,
-                    board: chess.Board, 
+                    env: gym.Env, 
                     observation_mode,
                     render_size: int = 512, 
                     dtype: Optional[np.float64] = np.float64, 
@@ -19,7 +21,7 @@ class ChessSpace(spaces.Space):
 
         spaces.Dict()
         super().__init__(None, dtype)
-        self.board = board
+        self.board = env.board
         self.observation_mode = observation_mode
         self.action_encoding_method = action_encoding
      
@@ -49,7 +51,7 @@ class ChessSpace(spaces.Space):
         return observation_spaces[observation_mode]
     
     def set_shape(self):
-         # I will pass the possible actions into the environment.
+        # I will pass the possible actions into the environment.
         # The possible actions are state dependent 
         #   -> different amount of actions in each state 
         #   -> No constant value possible / eventually is the encoding dimension possible 
@@ -60,6 +62,7 @@ class ChessSpace(spaces.Space):
         elif self.action_encoding_method == "symbol_wise":
             # (one action, uci format, 16 possible action symbols)
             action_shape = (1, 4, 16)
+        
         self._shape = self.board_space.shape, action_shape
 
     @staticmethod
@@ -74,6 +77,8 @@ class ChessSpace(spaces.Space):
 
         all_symbols = str(12345678)+ letters
         
+        
+        bar = Bar('Create possible actions', max=(len(nums)**2 * len(letters)**2) - len(nums) * len(letters) )
         actions = []
         for pick_letter in letters:
             for pick_num in range(1, 9):
@@ -81,8 +86,10 @@ class ChessSpace(spaces.Space):
                     for place_num in range(1, 9):
                         if pick_letter == place_letter and pick_num == place_num:
                             continue
+                        bar.next()
                         actions.append(pick_letter + str(pick_num) + place_letter + str(place_num))
-        
+        bar.finish()
+                        
         return actions, all_symbols
 
     def one_hot_encoding(self, actions, method_overwrite: str = None):
