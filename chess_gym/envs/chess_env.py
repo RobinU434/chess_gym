@@ -1,6 +1,7 @@
-from typing import Tuple
+from typing import List, Tuple
 import gym
 from gym import spaces
+from progress.bar import Bar
 
 import chess
 import chess.svg
@@ -32,6 +33,8 @@ class ChessEnv(gym.Env):
 
         self.action_encoding_method = action_encoding_method
         self.board_enccoding = board_encoding
+        self.possible_actions, self.action_symbols = self._get_possible_actions()
+        self.action_encodings = self.one_hot_encoding(self.possible_actions)
         self.observation_space = self._get_observation_space(render_size)
         self.onehot_encoder = OneHotEncoder(sparse=False)
         self.chess960 = chess960
@@ -44,7 +47,16 @@ class ChessEnv(gym.Env):
         self.viewer = None
 
         self.action_space = spaces.Discrete(64 * 64)  # each number represents the transition from a sqaure to another square
-        self.observation_space = ChessSpace(board=self.board, observation_mode=board_encoding)
+        # self.observation_space = ChessSpace(board=self, observation_mode=board_encoding)
+
+    @property
+    def n_action_symbols(self):
+        return len(self.action_symbols)
+
+    @property
+    def n_actions(self):
+        """len of all possible actions"""
+        return len(self.possible_actions)
 
     @staticmethod
     def _setup_board(chess960):
@@ -55,16 +67,30 @@ class ChessEnv(gym.Env):
 
         return board
             
-    def _get_observation_space(self, render_size):
+    def _get_observation_space(self, render_size) -> spaces.Dict:
 
-        observation_spaces = {  'rgb_array': spaces.Box(low = 0, high = 255,
+        board_obs_space = { 'rgb_array': spaces.Box(low = 0, high = 255,
                                                 shape = (render_size, render_size, 3),
-                                                dtype = np.uint8),
-                                'piece_map': spaces.Box(low = 0, high = 1,
+                                                dtype = torch.float64),
+                            'piece_map': spaces.Box(low = 0, high = 1,
                                                 shape = (8, 8, 12),
-                                                dtype = np.uint)}
+                                                dtype = torch.float64)}
 
-        return observation_spaces[self.board_enccoding], 
+        action_obs_space = {"action_wise": spaces.Box(low = 0, high = 1,
+                                                shape = (1, 1, 4032),
+                                                dtype = torch.float64), 
+                            "symbol_wise": spaces.Box(low = 0, high = 1,
+                                                shape = (1, 4, 16),
+                                                dtype = torch.float64)}
+
+        observation_space = spaces.Dict(
+            {   
+                "board": board_obs_space[self.board_enccoding],
+                "action": action_obs_space[self.action_encoding_method]
+            }
+        )                         
+
+        return observation_space
     
     def _get_image(self):
         out = BytesIO()
@@ -113,6 +139,83 @@ class ChessEnv(gym.Env):
 
         return piece_map
 
+    @staticmethod
+    def _get_possible_actions()-> Tuple[List, List]:
+        """returns all permuations of chess board squares and all used symbols
+
+        Returns:
+            Tuple[List, List]: _description_
+        """
+        nums = np.linspace(1, 8, 8)
+        letters = "abcdefgh"
+
+        all_symbols = str(12345678)+ letters
+        
+        
+        bar = Bar('Create possible actions', max=(len(nums)**2 * len(letters)**2) - len(nums) * len(letters) )
+        actions = []
+        for pick_letter in letters:
+            for pick_num in range(1, 9):
+                for place_letter in letters:
+                    for place_num in range(1, 9):
+                        if pick_letter == place_letter and pick_num == place_num:
+                            continue
+                        bar.next()
+                        actions.append(pick_letter + str(pick_num) + place_letter + str(place_num))
+        bar.finish()
+                        
+        return actions, all_symbols
+
+    def one_hot_encoding(self, actions, method_overwrite: str = None):
+        encoding_dict = {   "action_wise": self.action_wise_encoding,
+                            "symbol_wise": self.symbol_wise_encodings }
+        try:
+            if method_overwrite is not None:
+                return encoding_dict[method_overwrite](actions)
+            else:
+                return encoding_dict[self.action_encoding_method](actions)
+        except KeyError:
+            raise NotImplementedError(f"only 'action_wise' and symbol_wise' are supported methods. You chose {method_overwrite}")    
+       
+    def actionToIndex(self, action):
+        # Find symbol index from all_letters, e.g. "a1a2" = 0
+        return self.possible_actions.index(action)
+
+    def actionToTensor(self, action):
+        # Just for demonstration, turn an action into a <1 x n_actions> Tensor
+        tensor = torch.zeros(1, self.n_actions)
+        tensor[0, self.actionToIndex(action)] = 1
+        return tensor
+
+    def action_wise_encoding(self, actions: List[str]):
+        # Turn a line into a <len_action_sequence x 1 x n_actions>,
+        encodings = torch.zeros(len(actions), 1, self.n_actions)
+        for idx, action in enumerate(actions):
+            encodings[idx, 0, self.actionToIndex(action)] = 1
+
+        return encodings
+
+    def symbolToIndex(self, letter):
+        # Find symbol index from all_letters, e.g. "1" = 0
+        return self.action_symbols.index(letter)
+
+    def symbol_wise_encoding(self, action):
+        # Turn a line into a <action_lenght x n_letters>,
+        # action length is in uci format per default = 4
+        # or an array of one-hot letter vectors
+        tensor = torch.zeros(len(action), self.n_action_symbols)
+        for idx, symbol in enumerate(action):
+            tensor[idx, self.symbolToIndex(symbol)] = 1
+        return tensor
+    
+    def symbol_wise_encodings(self, actions):
+        # Turn a line into a <len_action_sequence x 4 x n_action_symbols>,
+        encodings = []
+        for action in actions:
+            encodings.append(self.symbol_wise_encoding(action))
+
+        return torch.stack(encodings)
+
     def _observe(self, encoding: str = "one_hot") -> Tuple[torch.Tensor, torch.Tensor]:
         # return board state
         observation_dict = {"linear": self._get_image,
@@ -122,7 +225,7 @@ class ChessEnv(gym.Env):
         legal_moves = list(self.board.legal_moves)
         legal_moves = list(map(lambda x: str(x), legal_moves))  # convert move object into uci move str
         # encode legal moves
-        legal_moves = self.observation_space.one_hot_encoding(legal_moves)
+        legal_moves = self.one_hot_encoding(legal_moves)
         
         return observation_dict[encoding](), legal_moves
 
