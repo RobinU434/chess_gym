@@ -15,7 +15,8 @@ from PIL import Image
 from sklearn.preprocessing import OneHotEncoder
 import torch
 
-from .observation_space import ChessSpace
+from chess_gym.envs.observation_space import ChessSpace
+from chess_gym.envs.chess_config import piece_index, NUM_ACTIONS
 
 class MoveSpace:
     def __init__(self, board):
@@ -71,22 +72,22 @@ class ChessEnv(gym.Env):
 
         board_obs_space = { 'rgb_array': spaces.Box(low = 0, high = 255,
                                                 shape = (render_size, render_size, 3),
-                                                dtype = torch.float64),
+                                                dtype = np.float64),
                             'piece_map': spaces.Box(low = 0, high = 1,
-                                                shape = (8, 8, 12),
-                                                dtype = torch.float64)}
+                                                shape = (8, 8, 13),
+                                                dtype = np.float64)}
 
         action_obs_space = {"action_wise": spaces.Box(low = 0, high = 1,
-                                                shape = (1, 1, 4032),
-                                                dtype = torch.float64), 
+                                                shape = (1, 1, self.n_actions),
+                                                dtype = np.float64), 
                             "symbol_wise": spaces.Box(low = 0, high = 1,
-                                                shape = (1, 4, 16),
-                                                dtype = torch.float64)}
+                                                shape = (1, 5, 16),
+                                                dtype = np.float64)}
 
         observation_space = spaces.Dict(
             {   
                 "board": board_obs_space[self.board_enccoding],
-                "action": action_obs_space[self.action_encoding_method]
+                "actions": action_obs_space[self.action_encoding_method]
             }
         )                         
 
@@ -98,8 +99,8 @@ class ChessEnv(gym.Env):
         cairosvg.svg2png(bytestring = bytestring, write_to = out)
         image = Image.open(out)
         return np.asarray(image)
-
-    def linear_encoder(x):
+    
+    def linear_board(self):
         """pass through functions
 
         Args:
@@ -108,9 +109,16 @@ class ChessEnv(gym.Env):
         Returns:
             any:
         """
-        return x
+        piece_map = np.zeros(64)
+
+        for square, piece in zip(self.board.piece_map().keys(), self.board.piece_map().values()):
+            piece_map[square] = piece_index[str(piece)]
+
+        piece_map = piece_map.reshape(8, 8)
+        
+        return piece_map
     
-    def one_hot(self, x: np.array):
+    def onehot_board(self):
         """returns one hot encoded matrix of game board
 
         Args:
@@ -119,23 +127,23 @@ class ChessEnv(gym.Env):
         Returns:
             np.array: one hot encoded game board with shape (8x8x13)
         """
-        x = x.reshape(64, 1)  # board size is constant
-        x = self.onehot_encoder.fit_transform(x)  # one hot encoding
-        return x.reshape(8, 8, 13)  # reshape into board shape 
-
-    def _get_piece_configuration(self, encoding: str="one_hot"):
-        piece_map = np.zeros(64)
+        piece_map = np.zeros((64, 13))
 
         for square, piece in zip(self.board.piece_map().keys(), self.board.piece_map().values()):
-            piece_map[square] = piece.piece_type * (piece.color * 2 - 1)
+            piece_map[square, piece_index[str(piece)]] = 1
 
-        piece_map = piece_map.reshape(8, 8)
+        piece_map = piece_map.reshape(8, 8, 13)  # reshape into board shape 
+    
+        return piece_map
+
+    def _get_piece_configuration(self, encoding: str="onehot"):
+        encoding_dict = {   "linear": self.linear_board,
+                            "onehot": self.onehot_board}
         
-        encoding_dict = {   "linear": self.linear_encoder,
-                            "one_hot": self.one_hot}
-        
-        # encoding
-        piece_map = encoding_dict[encoding](piece_map)
+        piece_map = encoding_dict[encoding]()
+
+        # flip piece_map for the same orientation as for self.board
+        piece_map = np.flip(piece_map, axis=0)
 
         return piece_map
 
@@ -148,11 +156,12 @@ class ChessEnv(gym.Env):
         """
         nums = np.linspace(1, 8, 8)
         letters = "abcdefgh"
+        promo_pieces = "prnbq"
 
         all_symbols = str(12345678)+ letters
         
         
-        bar = Bar('Create possible actions', max=(len(nums)**2 * len(letters)**2) - len(nums) * len(letters) )
+        bar = Bar('Create possible actions', max=NUM_ACTIONS)
         actions = []
         for pick_letter in letters:
             for pick_num in range(1, 9):
@@ -161,7 +170,15 @@ class ChessEnv(gym.Env):
                         if pick_letter == place_letter and pick_num == place_num:
                             continue
                         bar.next()
-                        actions.append(pick_letter + str(pick_num) + place_letter + str(place_num))
+                        uci_action_str = pick_letter + str(pick_num) + place_letter + str(place_num)
+                        actions.append(uci_action_str)
+
+                        # get promotions
+                        if place_num == 1 or place_num == 8:
+                            for piece in promo_pieces:
+                                actions.append(uci_action_str + piece)
+                                bar.next()
+        
         bar.finish()
                         
         return actions, all_symbols
@@ -216,6 +233,10 @@ class ChessEnv(gym.Env):
 
         return torch.stack(encodings)
 
+    @staticmethod
+    def movesToUCI(moves: chess.Move):
+        return list(map(lambda x: str(x), moves))
+
     def _observe(self, encoding: str = "one_hot") -> Tuple[torch.Tensor, torch.Tensor]:
         # return board state
         observation_dict = {"linear": self._get_image,
@@ -227,9 +248,14 @@ class ChessEnv(gym.Env):
         # encode legal moves
         legal_moves = self.one_hot_encoding(legal_moves)
         
-        return observation_dict[encoding](), legal_moves
+        obs = dict(
+            board = observation_dict[encoding](),
+            actions = legal_moves
+        )
 
-    def _strToAction(self, action):
+        return obs
+
+    def _ToAction(self, action):
         if type(action) == str:
             # only accept uci format e.g.: e3e4
             assert action[0] in "abcdefgh"
@@ -237,8 +263,14 @@ class ChessEnv(gym.Env):
             assert action[2] in "abcdefgh"
             assert int(action[3]) in [1, 2, 3, 4, 5, 6, 7, 8]
 
-            # convert action 
-            return chess.Move.from_uci(action)
+        if type(action) in [int, np.int64]:
+            # get uci encoding from current legal moves
+            legal_moves = self.movesToUCI(self.movesToUCI(self.board.legal_moves))
+            # action is the index where an element from self.possible_action is 1
+            action = legal_moves[action]
+        
+        # convert action 
+        return chess.Move.from_uci(action)
 
     def _action_to_move(self, action): 
         from_square = chess.Square(action[0])
@@ -257,9 +289,11 @@ class ChessEnv(gym.Env):
 
     def step(self, action) -> Tuple[Tuple[torch.Tensor, torch.Tensor], float, bool, dict]:
         # convert action in as str into move object
-        action = self._strToAction(action)
+        action = self._ToAction(action)
+        # print("before_action \n", self._get_piece_configuration(encoding="linear"))
         self.board.push(action)
-
+        # print("after_action \n", self.board)
+        
         observation = self._observe()
         result = self.board.result()
         reward = (1 if result == '1-0' else -1 if result == '0-1' else 0)
