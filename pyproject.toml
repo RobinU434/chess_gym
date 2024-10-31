@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "chess-gym"
+version = "0.1.0"
+description = ""
+authors = ["Robin Uhrich <robin.uhrich@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+gymnasium = "^1.0.0"
+numpy = "^2.1.2"
+matplotlib = "^3.9.2"
+cairosvg = "^2.7.1"
+tqdm = "^4.66.6"
+chess = "^1.11.1"
+scikit-learn = "^1.5.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
