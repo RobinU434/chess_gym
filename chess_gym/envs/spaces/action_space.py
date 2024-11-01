@@ -20,7 +20,7 @@ class ACTION_ENCODING(Enum):
     symbol_wise = 1
 
 
-class ChessActionSpace(Space):
+class ChessAction(Space):
     """
     Custom action space for chess moves, with support for both action-wise and symbol-wise 
     encoding. This class is built to handle a finite set of valid chess actions and can 
@@ -108,7 +108,13 @@ class ChessActionSpace(Space):
                 index = np.argmax(x)
                 return index >= 0 and index < len(self)
             elif self._action_encoding == ACTION_ENCODING.symbol_wise:
-                raise NotImplementedError()
+                offset = 0
+                action = np.empty(len(self.symbol_space_numeric))
+                for idx, numeric_space in enumerate(self.symbol_space_numeric):
+                    number = numeric_space[x[offset: offset + len(numeric_space)].astype(bool)]
+                    action[idx] = number.item()
+                    offset += len(numeric_space)
+                return action in self._possible_actions_numeric
             else:
                 raise NotImplementedError(
                     "Unknown action encoding method: " + self._action_encoding.name
@@ -124,7 +130,7 @@ class ChessActionSpace(Space):
         Returns:
             np.ndarray: The one-hot encoded vector representing the action in the action space.
         """
-        mask = self._possible_actions_strings == uci_action
+        mask = np.eqal(self._possible_actions_strings, uci_action).astype(int)
         assert mask.sum() == 1, "Given uci action is not in the set of all possible actions"
         index = np.argmax(mask)
         return self[index]
