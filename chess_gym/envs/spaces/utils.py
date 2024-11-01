@@ -68,3 +68,123 @@ def get_possible_actions(return_numeric: bool = False):
         return np.stack(actions).squeeze(), (letters, nums, letters, nums, promo_pieces)
     else:
         return actions, (letters, nums, letters, nums, promo_pieces)
+
+
+def piece_map2fen(board: np.ndarray) -> str:
+    """
+    Converts a piece map to FEN notation.
+
+    Args:
+        board (np.ndarray): An (8, 8) array representing pieces on a chessboard.
+
+    Returns:
+        str: The FEN string representation of the board.
+    """
+    fen = ""
+    for row in range(board.shape[0]):
+        count = 0
+        for col in range(board.shape[0]):
+            if board[row, col] == 0:
+                count += 1
+                continue
+            if count > 0:
+                fen += str(count)
+            fen += PIECE_SYMBOLS[board[row, col]]
+            count = 0
+        if count > 0:
+            fen += str(count)
+        fen += "/"
+    return fen[:-1]
+
+
+def piece_map2rgb(board: np.ndarray) -> np.ndarray:
+    """
+    Converts a piece map to an RGB representation.
+
+    Args:
+        board (np.ndarray): An (8, 8) piece map array.
+
+    Returns:
+        np.ndarray: RGB representation of the board.
+    """
+    raise NotImplementedError
+    fen = piece_map2fen(board)
+    board = chess.Board(fen)
+
+
+def piece_map2one_hot(board: np.ndarray) -> np.ndarray:
+    """
+    Converts a piece map to a one-hot encoding representation.
+
+    Args:
+        board (np.ndarray): An (8, 8) array representing pieces on a chessboard.
+
+    Returns:
+        np.ndarray: An (8, 8, 12) array with one-hot encoding of pieces.
+    """
+    encoding = np.zeros((8, 8, 12))
+    for idx, piece in enumerate(PIECES):
+        encoding[(board == piece.value), idx] = 1
+    return encoding.astype(float)
+
+
+def contains_rgb_array(board: np.ndarray) -> bool:
+    """
+    Validates if a given board is a valid RGB array representation.
+
+    Args:
+        board (np.ndarray): Array to validate.
+
+    Returns:
+        bool: True if valid, False otherwise.
+    """
+    raise NotImplementedError
+
+
+def contains_piece_map(board: np.ndarray) -> bool:
+    """
+    Validates if a given board is a valid piece map.
+
+    Args:
+        board (np.ndarray): Array to validate.
+
+    Returns:
+        bool: True if valid, False otherwise.
+    """
+    return board.shape == (8, 8) and board.max() <= 12 and board.min() >= 0
+
+
+def contains_one_hot(board: np.ndarray) -> bool:
+    """
+    Validates if a given board is a valid one-hot encoded representation.
+
+    Args:
+        board (np.ndarray): Array to validate.
+
+    Returns:
+        bool: True if valid, False otherwise.
+    """
+    return board.shape == (8, 8, 12) and set(np.unique(board).astype(int)) == {0, 1}
+
+
+def contains_fen(board: str) -> bool:
+    """
+    Validates if a given string is a valid FEN representation.
+
+    Args:
+        board (str): FEN string to validate.
+
+    Returns:
+        bool: True if valid, False otherwise.
+    """
+    for row in board.split("/"):
+        count = 0
+        for col in row:
+            col: str
+            if col.isnumeric():
+                count += int(col)
+            else:
+                count += 1
+        if count != 8:
+            return False
+    return True

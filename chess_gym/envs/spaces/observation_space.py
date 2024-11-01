@@ -6,6 +6,7 @@ from enum import Enum
 import numpy as np
 
 from chess_gym.envs.spaces.action_space import ChessAction
+from chess_gym.envs.spaces.utils import contains_fen, contains_one_hot, contains_piece_map, contains_rgb_array, piece_map2fen, piece_map2one_hot, piece_map2rgb
 
 
 class BOARD_ENCODING(Enum):
@@ -35,21 +36,21 @@ class PIECES(Enum):
     """
 
     # 0 is for an empty field but this is no piece
-    king_b = 1
-    queen_b = 2
-    rook_b = 3
-    bishop_b = 4
-    knight_b = 5
-    pawn_b = 6
-    king_w = 7
-    queen_w = 8
-    rook_w = 9
-    bishop_w = 10
-    knight_w = 11
-    pawn_w = 12
+    KING_B = 1
+    QUEEN_B = 2
+    ROOK_B = 3
+    BISHOP_B = 4
+    KNIGHT_B = 5
+    PAWN_B = 6
+    KING_W = 7
+    QUEEN_W = 8
+    ROOK_W = 9
+    BISHOP_W = 10
+    KNIGHT_W = 11
+    PAWN_W = 12
 
 
-class PIECE_MAX_OCCURANCE(Enum):
+class PieceMaxOccurance(Enum):
     """
     Enum for the maximum occurrence of each piece type in a chess game.
 
@@ -58,18 +59,18 @@ class PIECE_MAX_OCCURANCE(Enum):
         king_w, queen_w, rook_w, etc. (int): Max occurrences for white pieces.
     """
 
-    king_b = 1
-    queen_b = 1
-    rook_b = 2
-    bishop_b = 2
-    knight_b = 2
-    pawn_b = 8
-    king_w = 1
-    queen_w = 1
-    rook_w = 2
-    bishop_w = 2
-    knight_w = 2
-    pawn_w = 8
+    KING_B = 1
+    QUEEN_B = 1
+    ROOK_B = 2
+    BISHOP_B = 2
+    KNIGHT_B = 2
+    PAWN_B = 8
+    KING_W = 1
+    QUEEN_W = 1
+    ROOK_W = 2
+    BISHOP_W = 2
+    KNIGHT_W = 2
+    PAWN_W = 8
 
 
 PIECE_SYMBOLS = {
@@ -86,126 +87,6 @@ PIECE_SYMBOLS = {
     11: "n",
     12: "p",
 }
-
-
-def piece_map2fen(board: np.ndarray) -> str:
-    """
-    Converts a piece map to FEN notation.
-
-    Args:
-        board (np.ndarray): An (8, 8) array representing pieces on a chessboard.
-
-    Returns:
-        str: The FEN string representation of the board.
-    """
-    fen = ""
-    for row in range(board.shape[0]):
-        count = 0
-        for col in range(board.shape[0]):
-            if board[row, col] == 0:
-                count += 1
-                continue
-            if count > 0:
-                fen += str(count)
-            fen += PIECE_SYMBOLS[board[row, col]]
-            count = 0
-        if count > 0:
-            fen += str(count)
-        fen += "/"
-    return fen[:-1]
-
-
-def piece_map2rgb(board: np.ndarray) -> np.ndarray:
-    """
-    Converts a piece map to an RGB representation.
-
-    Args:
-        board (np.ndarray): An (8, 8) piece map array.
-
-    Returns:
-        np.ndarray: RGB representation of the board.
-    """
-    raise NotImplementedError
-    fen = piece_map2fen(board)
-    board = chess.Board(fen)
-
-
-def piece_map2one_hot(board: np.ndarray) -> np.ndarray:
-    """
-    Converts a piece map to a one-hot encoding representation.
-
-    Args:
-        board (np.ndarray): An (8, 8) array representing pieces on a chessboard.
-
-    Returns:
-        np.ndarray: An (8, 8, 12) array with one-hot encoding of pieces.
-    """
-    encoding = np.zeros((8, 8, 12))
-    for idx, piece in enumerate(PIECES):
-        encoding[(board == piece.value), idx] = 1
-    return encoding.astype(float)
-
-
-def contains_rgb_array(board: np.ndarray) -> bool:
-    """
-    Validates if a given board is a valid RGB array representation.
-
-    Args:
-        board (np.ndarray): Array to validate.
-
-    Returns:
-        bool: True if valid, False otherwise.
-    """
-    raise NotImplementedError
-
-
-def contains_piece_map(board: np.ndarray) -> bool:
-    """
-    Validates if a given board is a valid piece map.
-
-    Args:
-        board (np.ndarray): Array to validate.
-
-    Returns:
-        bool: True if valid, False otherwise.
-    """
-    return board.shape == (8, 8) and board.max() <= 12 and board.min() >= 0
-
-
-def contains_one_hot(board: np.ndarray) -> bool:
-    """
-    Validates if a given board is a valid one-hot encoded representation.
-
-    Args:
-        board (np.ndarray): Array to validate.
-
-    Returns:
-        bool: True if valid, False otherwise.
-    """
-    return board.shape == (8, 8, 12) and set(np.unique(board).astype(int)) == {0, 1}
-
-
-def contains_fen(board: str) -> bool:
-    """
-    Validates if a given string is a valid FEN representation.
-
-    Args:
-        board (str): FEN string to validate.
-
-    Returns:
-        bool: True if valid, False otherwise.
-    """
-    for row in board.split("/"):
-        count = 0
-        for col in row:
-            col: str
-            if col.isnumeric():
-                count += int(col)
-            else:
-                count += 1
-        if count != 8:
-            return False
-    return True
 
 
 class BoardSpace(Space):
@@ -281,17 +162,17 @@ class BoardSpace(Space):
         # sample placement on board
         # if there are two bishops of the same color place them first
         bishop_mask = np.ones(len(self._all_tiles))
-        if (figures == PIECES.bishop_b.value).sum() == 2:
+        if (figures == PIECES.BISHOP_B.value).sum() == 2:
             # place figures
-            board[*black_tile[0]] = PIECES.bishop_b.value
-            board[*white_tile[0]] = PIECES.bishop_b.value
+            board[*black_tile[0]] = PIECES.BISHOP_B.value
+            board[*white_tile[0]] = PIECES.BISHOP_B.value
 
             # update_mask
             bishop_mask[black_indices[0]] = 0
             bishop_mask[white_indices[0]] = 0
 
             # pop bishops
-            figures = np.delete(figures, figures == PIECES.bishop_b.value)
+            figures = np.delete(figures, figures == PIECES.BISHOP_B.value)
         if (figures == PIECES.bishop_w.value).sum() == 2:
             # place figures
             board[*black_tile[1]] = PIECES.bishop_w.value
@@ -347,7 +228,7 @@ class BoardSpace(Space):
             all_pieces.extend(
                 [
                     piece.value
-                    for _ in range(getattr(PIECE_MAX_OCCURANCE, piece.name).value)
+                    for _ in range(getattr(PieceMaxOccurance, piece.name).value)
                 ]
             )
         return np.array(all_pieces)
