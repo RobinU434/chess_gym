@@ -2,7 +2,7 @@ from typing import Literal
 from gymnasium.spaces import Space
 import numpy as np
 
-from chess_gym.envs.spaces.utils import get_numeric_action, get_possible_actions
+from chess_gym.spaces.utils import get_numeric_action, get_possible_actions
 from enum import Enum
 
 
@@ -125,7 +125,7 @@ class ChessAction(Space):
         Returns:
             np.ndarray: The one-hot encoded vector representing the action in the action space.
         """
-        mask = np.eqal(self._possible_actions_strings, uci_action).astype(int)
+        mask = np.equal(self._possible_actions_strings, uci_action).astype(int)
         assert mask.sum() == 1, "Given uci action is not in the set of all possible actions"
         index = np.argmax(mask)
         return self[index]

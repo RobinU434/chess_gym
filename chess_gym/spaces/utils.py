@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 import chess
 
-from chess_gym.envs.chess_config import NUM_ACTIONS, PIECE_SYMBOLS, Pieces
+from chess_gym.chess_config import NUM_ACTIONS, PIECE_SYMBOLS, Pieces
 
 
 def get_possible_actions(return_numeric: bool = False):

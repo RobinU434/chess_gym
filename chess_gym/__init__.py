@@ -1,13 +1,3 @@
-from gymnasium.envs.registration import register
-
-register(
-    id='Chess-v0',
-    entry_point='chess_gym.envs:ChessEnv',
-    kwargs={'chess960': False}
-)
-
-register(
-    id='Chess960-v0',
-    entry_point='chess_gym.envs:ChessEnv',
-    kwargs={'chess960': True}
-)
+from chess_gym.chess_env import ChessEnv
+from chess_gym.spaces.action_space import ChessAction
+from chess_gym.spaces.observation_space import ChessObservation

@@ -1,14 +1,16 @@
-from typing import Dict
+from io import BytesIO
+from typing import Dict, Tuple
+import cairosvg
 import chess.svg
 from gymnasium.spaces import Space, Box
 from enum import Enum
 
 import numpy as np
 
-from chess_gym.envs.chess_config import BoardEncoding, PieceMaxOccurance, Pieces
-from chess_gym.envs.spaces.action_space import ChessAction
-from chess_gym.envs.spaces.utils import contains_fen, contains_one_hot, contains_piece_map, contains_rgb_array, fen2piece_map, piece_map2fen, piece_map2one_hot, piece_map2rgb
-
+from chess_gym.chess_config import BoardEncoding, PieceMaxOccurance, Pieces
+from chess_gym.spaces.action_space import ChessAction
+from chess_gym.spaces.utils import contains_fen, contains_one_hot, contains_piece_map, contains_rgb_array, fen2piece_map, piece_map2fen, piece_map2one_hot, piece_map2rgb
+from PIL import Image
 
 class BoardSpace(Space):
     """
@@ -138,6 +140,7 @@ class BoardSpace(Space):
 
     def encode(self, board: chess.Board) -> str | np.ndarray:
         fen = board.fen()
+        fen = fen.split(" ")[0]
         if self._encoding == BoardEncoding.FEN:
             return fen
         peice_map = fen2piece_map(fen)
@@ -171,6 +174,7 @@ class BoardSpace(Space):
         x, y = np.meshgrid(np.arange(8), np.arange(8))
         coords = np.stack([x, y]).reshape(2, -1).T
         return coords
+    
 
 
 class ChessObservation(Space):
