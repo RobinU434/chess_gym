@@ -2,7 +2,7 @@ from typing import Literal
 from gymnasium.spaces import Space
 import numpy as np
 
-from chess_gym.envs.spaces.utils import get_possible_actions
+from chess_gym.envs.spaces.utils import get_numeric_action, get_possible_actions
 from enum import Enum
 
 
@@ -108,12 +108,7 @@ class ChessAction(Space):
                 index = np.argmax(x)
                 return index >= 0 and index < len(self)
             elif self._action_encoding == ACTION_ENCODING.symbol_wise:
-                offset = 0
-                action = np.empty(len(self.symbol_space_numeric))
-                for idx, numeric_space in enumerate(self.symbol_space_numeric):
-                    number = numeric_space[x[offset: offset + len(numeric_space)].astype(bool)]
-                    action[idx] = number.item()
-                    offset += len(numeric_space)
+                action = get_numeric_action(x, self.symbol_space_numeric)
                 return action in self._possible_actions_numeric
             else:
                 raise NotImplementedError(
@@ -134,6 +129,18 @@ class ChessAction(Space):
         assert mask.sum() == 1, "Given uci action is not in the set of all possible actions"
         index = np.argmax(mask)
         return self[index]
+    
+    def action_to_uci(self, action: np.ndarray) -> str:
+        assert self.contains(action)
+        if self._action_encoding == ACTION_ENCODING.action_wise:
+            return self._possible_actions_strings[np.argmax(action)]
+        elif self._action_encoding == ACTION_ENCODING.symbol_wise:
+            action = get_numeric_action(action, self.symbol_space_numeric)
+            index = np.argmax((action == self._possible_actions_numeric).sum(-1))
+            return self._possible_actions_strings[index]
+        else: 
+            raise NotImplementedError(f"No method for {self._action_encoding=}")
+
 
     def __getitem__(self, index: int) -> np.ndarray:
         """

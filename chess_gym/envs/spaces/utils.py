@@ -1,8 +1,10 @@
 from itertools import product
+from typing import List
 import numpy as np
 from tqdm import tqdm
+import chess
 
-from chess_gym.envs.chess_config import NUM_ACTIONS
+from chess_gym.envs.chess_config import NUM_ACTIONS, PIECE_SYMBOLS, Pieces
 
 
 def get_possible_actions(return_numeric: bool = False):
@@ -123,7 +125,7 @@ def piece_map2one_hot(board: np.ndarray) -> np.ndarray:
         np.ndarray: An (8, 8, 12) array with one-hot encoding of pieces.
     """
     encoding = np.zeros((8, 8, 12))
-    for idx, piece in enumerate(PIECES):
+    for idx, piece in enumerate(Pieces):
         encoding[(board == piece.value), idx] = 1
     return encoding.astype(float)
 
@@ -188,3 +190,24 @@ def contains_fen(board: str) -> bool:
         if count != 8:
             return False
     return True
+
+def fen2piece_map(fen: str) -> np.ndarray:
+    piece_symbols_reversed = {v: k for k, v in PIECE_SYMBOLS.items()}
+    board = np.zeros((8, 8))
+    for row_idx, row in enumerate(fen.split("/")):
+        col_idx = 0
+        for col in row:
+            if col.isnumeric():
+                col_idx += int(col)
+                continue
+            board[row_idx, col_idx] = piece_symbols_reversed[col]
+    return board
+
+def get_numeric_action(action: np.ndarray, numeric_symbol_spaces: List[np.ndarray]) -> np.ndarray:
+    offset = 0
+    out = np.empty(len(numeric_symbol_spaces))
+    for idx, numeric_space in enumerate(numeric_symbol_spaces):
+        number = numeric_space[action[offset: offset + len(numeric_space)].astype(bool)]
+        out[idx] = number.item()
+        offset += len(numeric_space)
+    return out

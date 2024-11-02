@@ -5,88 +5,9 @@ from enum import Enum
 
 import numpy as np
 
+from chess_gym.envs.chess_config import BoardEncoding, PieceMaxOccurance, Pieces
 from chess_gym.envs.spaces.action_space import ChessAction
-from chess_gym.envs.spaces.utils import contains_fen, contains_one_hot, contains_piece_map, contains_rgb_array, piece_map2fen, piece_map2one_hot, piece_map2rgb
-
-
-class BOARD_ENCODING(Enum):
-    """
-    Enum for board encoding types.
-
-    Attributes:
-        rgb_array (int): Encodes the board as an RGB array.
-        piece_map (int): Encodes the board as a piece map array.
-        one_hot (int): Encodes the board as a one-hot array.
-        fen (int): Encodes the board as a FEN string.
-    """
-
-    rgb_array = 0
-    piece_map = 1
-    one_hot = 2
-    fen = 3
-
-
-class PIECES(Enum):
-    """
-    Enum for chess pieces with numeric values corresponding to black and white pieces.
-
-    Attributes:
-        king_b, queen_b, rook_b, etc. (int): Values representing black pieces.
-        king_w, queen_w, rook_w, etc. (int): Values representing white pieces.
-    """
-
-    # 0 is for an empty field but this is no piece
-    KING_B = 1
-    QUEEN_B = 2
-    ROOK_B = 3
-    BISHOP_B = 4
-    KNIGHT_B = 5
-    PAWN_B = 6
-    KING_W = 7
-    QUEEN_W = 8
-    ROOK_W = 9
-    BISHOP_W = 10
-    KNIGHT_W = 11
-    PAWN_W = 12
-
-
-class PieceMaxOccurance(Enum):
-    """
-    Enum for the maximum occurrence of each piece type in a chess game.
-
-    Attributes:
-        king_b, queen_b, rook_b, etc. (int): Max occurrences for black pieces.
-        king_w, queen_w, rook_w, etc. (int): Max occurrences for white pieces.
-    """
-
-    KING_B = 1
-    QUEEN_B = 1
-    ROOK_B = 2
-    BISHOP_B = 2
-    KNIGHT_B = 2
-    PAWN_B = 8
-    KING_W = 1
-    QUEEN_W = 1
-    ROOK_W = 2
-    BISHOP_W = 2
-    KNIGHT_W = 2
-    PAWN_W = 8
-
-
-PIECE_SYMBOLS = {
-    1: "K",
-    2: "Q",
-    3: "R",
-    4: "B",
-    5: "N",
-    6: "P",
-    7: "k",
-    8: "q",
-    9: "r",
-    10: "b",
-    11: "n",
-    12: "p",
-}
+from chess_gym.envs.spaces.utils import contains_fen, contains_one_hot, contains_piece_map, contains_rgb_array, fen2piece_map, piece_map2fen, piece_map2one_hot, piece_map2rgb
 
 
 class BoardSpace(Space):
@@ -99,20 +20,20 @@ class BoardSpace(Space):
         contains_funcs (dict): Functions for validating board contents.
     """
 
-    def __init__(self, encoding: BOARD_ENCODING = BOARD_ENCODING.piece_map, seed=None):
+    def __init__(self, encoding: BoardEncoding = BoardEncoding.PIECE_MAP, seed=None):
         shape = None
         dtype = None
         self._encoding = encoding
-        if self._encoding == BOARD_ENCODING.rgb_array:
+        if self._encoding == BoardEncoding.RGB_ARRAY:
             shape = (3, 300, 300)
             dtype = float
-        elif self._encoding == BOARD_ENCODING.piece_map:
+        elif self._encoding == BoardEncoding.PIECE_MAP:
             shape = (8, 8)
             dtype = float
-        elif self._encoding == BOARD_ENCODING.one_hot:
+        elif self._encoding == BoardEncoding.ONE_HOT:
             shape = (8, 8, 12)
             dtype = float
-        elif self._encoding == BOARD_ENCODING.fen:
+        elif self._encoding == BoardEncoding.FEN:
             shape = None
             dtype = str
 
@@ -121,17 +42,17 @@ class BoardSpace(Space):
         self._all_tiles = self._get_all_tiles()
 
         self.encoding_funcs = {
-            BOARD_ENCODING.rgb_array: piece_map2rgb,
-            BOARD_ENCODING.piece_map: lambda x: x,
-            BOARD_ENCODING.one_hot: piece_map2one_hot,
-            BOARD_ENCODING.fen: piece_map2fen,
+            BoardEncoding.RGB_ARRAY: piece_map2rgb,
+            BoardEncoding.PIECE_MAP: lambda x: x,
+            BoardEncoding.ONE_HOT: piece_map2one_hot,
+            BoardEncoding.FEN: piece_map2fen,
         }
 
         self.contains_funcs = {
-            BOARD_ENCODING.rgb_array: contains_rgb_array,
-            BOARD_ENCODING.piece_map: contains_piece_map,
-            BOARD_ENCODING.one_hot: contains_one_hot,
-            BOARD_ENCODING.fen: contains_fen,
+            BoardEncoding.RGB_ARRAY: contains_rgb_array,
+            BoardEncoding.PIECE_MAP: contains_piece_map,
+            BoardEncoding.ONE_HOT: contains_one_hot,
+            BoardEncoding.FEN: contains_fen,
         }
 
     def sample(self, mask: np.ndarray = None) -> np.ndarray:
@@ -162,28 +83,28 @@ class BoardSpace(Space):
         # sample placement on board
         # if there are two bishops of the same color place them first
         bishop_mask = np.ones(len(self._all_tiles))
-        if (figures == PIECES.BISHOP_B.value).sum() == 2:
+        if (figures == Pieces.BISHOP_B.value).sum() == 2:
             # place figures
-            board[*black_tile[0]] = PIECES.BISHOP_B.value
-            board[*white_tile[0]] = PIECES.BISHOP_B.value
+            board[*black_tile[0]] = Pieces.BISHOP_B.value
+            board[*white_tile[0]] = Pieces.BISHOP_B.value
 
             # update_mask
             bishop_mask[black_indices[0]] = 0
             bishop_mask[white_indices[0]] = 0
 
             # pop bishops
-            figures = np.delete(figures, figures == PIECES.BISHOP_B.value)
-        if (figures == PIECES.bishop_w.value).sum() == 2:
+            figures = np.delete(figures, figures == Pieces.BISHOP_B.value)
+        if (figures == Pieces.BISHOP_W.value).sum() == 2:
             # place figures
-            board[*black_tile[1]] = PIECES.bishop_w.value
-            board[*white_tile[1]] = PIECES.bishop_w.value
+            board[*black_tile[1]] = Pieces.BISHOP_W.value
+            board[*white_tile[1]] = Pieces.BISHOP_W.value
 
             # update_mask
             bishop_mask[black_indices[1]] = 0
             bishop_mask[white_indices[1]] = 0
 
             # pop bishops
-            figures = np.delete(figures, figures == PIECES.bishop_w.value)
+            figures = np.delete(figures, figures == Pieces.BISHOP_W.value)
 
         if mask is None:
             mask = bishop_mask
@@ -215,6 +136,13 @@ class BoardSpace(Space):
         """
         return self.contains_funcs[self._encoding](x)
 
+    def encode(self, board: chess.Board) -> str | np.ndarray:
+        fen = board.fen()
+        if self._encoding == BoardEncoding.FEN:
+            return fen
+        peice_map = fen2piece_map(fen)
+        return self.encoding_funcs[self._encoding](peice_map)
+
 
     def _get_all_pieces(self) -> np.ndarray:
         """
@@ -224,7 +152,7 @@ class BoardSpace(Space):
             np.ndarray: Array of all pieces by maximum occurrence.
         """
         all_pieces = []
-        for piece in PIECES:
+        for piece in Pieces:
             all_pieces.extend(
                 [
                     piece.value
@@ -258,7 +186,7 @@ class ChessObservation(Space):
     def __init__(
         self,
         action_space: ChessAction,
-        board_encoding: BOARD_ENCODING = BOARD_ENCODING.piece_map,
+        board_encoding: BoardEncoding = BoardEncoding.PIECE_MAP,
         shape=None,
         dtype=None,
         seed=None,
@@ -267,7 +195,7 @@ class ChessObservation(Space):
         self._action_space = action_space
         self._board_encoding = board_encoding
 
-        self._board_space = BoardSpace(encoding=BOARD_ENCODING.piece_map)
+        self._board_space = BoardSpace(encoding=BoardEncoding.PIECE_MAP)
 
     def sample(self, mask: np.ndarray = None) -> Dict[str, str | np.ndarray]:
         """
@@ -305,3 +233,6 @@ class ChessObservation(Space):
             np.prod([self._action_space.contains(action) for action in x["actions"]])
         )
         return board_ok and action_ok
+    
+    def encode(self, board: chess.Board) -> np.ndarray | str:
+        return self._board_space.encode(board)
