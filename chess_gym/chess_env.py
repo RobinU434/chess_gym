@@ -10,9 +10,6 @@ from PIL import Image
 from chess_gym.spaces.action_space import ACTION_ENCODING, ChessAction
 from chess_gym.spaces.observation_space import BoardEncoding, ChessObservation
 
-from gymnasium.envs.classic_control
-
-
 class ChessEnv(Env):
     def __init__(
         self,
@@ -64,7 +61,15 @@ class ChessEnv(Env):
         truncated = self._is_truncated()
         reward = self._get_reward()
 
-        return observation, reward, terminated, truncated, {}
+        info = {'next_turn': self.board.turn,
+                'castling_rights': self.board.castling_rights,
+                'fullmove_number': self.board.fullmove_number,
+                'halfmove_clock': self.board.halfmove_clock,
+                'promoted': self.board.promoted,
+                'chess960': self.board.chess960,
+                'ep_square': self.board.ep_square}
+
+        return observation, reward, terminated, truncated, info
 
     def render(self):
         img = self._get_image()
