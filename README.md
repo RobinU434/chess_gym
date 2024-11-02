@@ -1,4 +1,4 @@
-# Chess `Gym`
+# Chess Environment - Gymnasium 
 
 Gym Chess is an environment for reinforcement learning with the [Farama Gymnasium](https://gymnasium.farama.org/) module.
 
