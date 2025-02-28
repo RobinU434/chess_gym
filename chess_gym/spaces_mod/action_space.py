@@ -1,8 +1,8 @@
 from typing import Literal
-from gymnasium.spaces import Space
+from gymnasium.spaces import Space, Discrete
 import numpy as np
 
-from chess_gym.spaces.utils import get_numeric_action, get_possible_actions
+from chess_gym.spaces_mod.utils import get_numeric_action, get_possible_actions
 from enum import Enum
 
 
@@ -16,9 +16,42 @@ class ACTION_ENCODING(Enum):
         symbol_wise (int): Encodes actions based on individual symbols (e.g., origin and destination
                            squares and optional promotion) in a more granular, symbol-based format.
     """
-    action_wise = 0
-    symbol_wise = 1
+    one_hot = 0
+    multi_hot = 1
 
+
+    class ChessAction(Discrete):
+        def __init__(self, seed = None):
+            possible_uci_actions, _ = get_possible_actions(
+                return_numeric=False,
+            )
+            self._uci_action_map = np.array(possible_uci_actions)
+            n = len(possible_uci_actions)
+            super().__init__(n, seed, 0)
+
+        def from_uci(self, uci_action: str | np.ndarray):
+            try:
+                if isinstance(uci_action, np.ndarray):
+                    mask = self._uci_action_map[None].repeat(len(uci_action), axis=0) == uci_action[:, None]
+                    indices = np.argwhere(mask)[:, 1]
+                    return indices
+                else:
+                    return np.argwhere(self._uci_action_map == uci_action)
+            except KeyError:
+                raise ValueError(f"Given uci action: {uci_action} is not part of action space")
+        
+        def to_uci(self, action: int | np.ndarray):
+            if isinstance(action, np.ndarray): 
+                return self._uci_action_map[action]
+            else:
+                return str(self._uci_action_map[action])
+            
+        def __repr__(self) -> str:
+            """Gives a string representation of this space."""
+            if self.start != 0:
+                return f"ChessAction({self.n}, start={self.start})"
+            return f"ChessAction({self.n})"
+    
 
 class ChessAction(Space):
     """
@@ -44,7 +77,7 @@ class ChessAction(Space):
     """
     def __init__(
         self,
-        action_encoding: ACTION_ENCODING = ACTION_ENCODING.action_wise,
+        action_encoding: ACTION_ENCODING = ACTION_ENCODING.one_hot,
         shape=None,
         dtype=None,
         seed=None,
@@ -60,9 +93,9 @@ class ChessAction(Space):
             )
         )
 
-        if self._action_encoding == ACTION_ENCODING.action_wise:
+        if self._action_encoding == ACTION_ENCODING.one_hot:
             self._shape = (len(self._possible_actions_strings), )
-        elif self._action_encoding == ACTION_ENCODING.symbol_wise:
+        elif self._action_encoding == ACTION_ENCODING.multi_hot:
             self._shape = np.concat(self.symbol_space_numeric).shape
 
     def sample(self, mask=None):
@@ -103,11 +136,11 @@ class ChessAction(Space):
         elif isinstance(x, int):
             return x >= 0 and x < len(self)
         elif isinstance(x, np.ndarray):
-            if self._action_encoding == ACTION_ENCODING.action_wise:
+            if self._action_encoding == ACTION_ENCODING.one_hot:
                 assert x.sum() == 1 and x.max() == 1, "Assert one hot encoded vector"
                 index = np.argmax(x)
                 return index >= 0 and index < len(self)
-            elif self._action_encoding == ACTION_ENCODING.symbol_wise:
+            elif self._action_encoding == ACTION_ENCODING.multi_hot:
                 action = get_numeric_action(x, self.symbol_space_numeric)
                 return action in self._possible_actions_numeric
             else:
@@ -132,9 +165,9 @@ class ChessAction(Space):
     
     def action_to_uci(self, action: np.ndarray) -> str:
         assert self.contains(action)
-        if self._action_encoding == ACTION_ENCODING.action_wise:
+        if self._action_encoding == ACTION_ENCODING.one_hot:
             return self._possible_actions_strings[np.argmax(action)]
-        elif self._action_encoding == ACTION_ENCODING.symbol_wise:
+        elif self._action_encoding == ACTION_ENCODING.multi_hot:
             action = get_numeric_action(action, self.symbol_space_numeric)
             index = np.argmax((action == self._possible_actions_numeric).sum(-1))
             return self._possible_actions_strings[index]
@@ -154,10 +187,10 @@ class ChessAction(Space):
         """
         action = np.zeros(self._shape, dtype=self.dtype)
 
-        if self._action_encoding == ACTION_ENCODING.action_wise:
+        if self._action_encoding == ACTION_ENCODING.one_hot:
             # one hot encoding of action
             action[index] = 1
-        elif self._action_encoding == ACTION_ENCODING.symbol_wise:
+        elif self._action_encoding == ACTION_ENCODING.multi_hot:
             action_repr = self._possible_actions_numeric[index]
             acc = 0
             for action_symbol, symbol_space in zip(

@@ -1,18 +1,24 @@
-# Chess Environment - Gymnasium 
-
-Gym Chess is an environment for reinforcement learning with the [Farama Gymnasium](https://gymnasium.farama.org/) module.
+# Chess Gym Environment
 
 <a href="https://imgbb.com/"><img src="https://i.ibb.co/Fw4fhzK/Screen-Shot-2020-10-27-at-2-30-21-PM.png" alt="Screen-Shot-2020-10-27-at-2-30-21-PM" border="0"></a>
+## Overview
+This project provides a custom Chess environment compatible with Farama Foundation Gymnasium. It allows for training and evaluating reinforcement learning (RL) agents in chess-based scenarios. The environment includes multiple observation and action wrappers to support different input representations and interaction methods.
+
+
+
+## Features
+- Standard Chess environment following Farama Foundation Gymnasium API
+- Single-player mode with a custom or random opponent
+- Multiple observation wrappers:
+  - One-hot encoded board state
+  - Piece map representation
+  - FEN notation
+  - RGB image representation
+- Action wrappers supporting UCI notation
+- Render support for human-readable board visualization
 
 ## Installation
-
-1. Install [Farama Gymnasium](https://gymnasium.farama.org/) ([GitHub](https://github.com/Farama-Foundation/Gymnasium)) and its dependencies with poetry. \
-
-```bash
-pip install gymnasium
-```
-
-2. Download and install `chess_gym`: \
+To install the Chess Gym environment, clone this repository and install the required dependencies:
 
 ```bash
 git clone https://github.com/RobinU434/chess_gym
@@ -20,29 +26,62 @@ cd chess_gym
 poetry install  
 ```
 
-## Environments
-<a href="https://ibb.co/dgLW9rH"><img src="images/envs.png" border="0"></a>
-
-## Example
-You can use the standard `Chess-v0` environment as so:
+## Usage
+### Creating and Interacting with the Environment
 ```python
-from chess_gym import ChessEnv
+from chess_gym.chess_env import ChessEnv
 
-env = ChessEnv()
-env.reset()
+env = ChessEnv(render_mode="rgb_array")
+obs, info = env.reset()
+print("Initial observation:", obs)
 
-terminal = False
+# Take a random action ...
+action = env.action_space.sample()
+obs, reward, terminated, truncated, info = env.step(action)
+print("Next observation:", obs)
+print("Reward:", reward)
 
-while not (terminal or truncated):
-    action = env.action_space.sample()
-    observation, reward, terminal, truncated, info = env.step(action)
-    env.render()
+# or make use of allowed actions
+available_actions = info["available_actions"]
+action = available_actions[np.random.choice(len(available_actions))]
+obs, reward, terminated, truncated, info = env.step(action)
+print("Next observation:", obs)
+print("Reward:", reward)
+
 env.close()
 ```
 
+### Using Wrappers
+The environment can be wrapped with various observation and action wrappers:
+```python
+from chess_gym.wrappers import PieceMapWrapper, FenObsWrapper, RBGObsWrapper, UCIActionWrapper
+
+env = ChessEnv()
+env = FenObsWrapper(env)
+env = UCIActionWrapper(env)
+
+obs, info = env.reset()
+uci_action = "e2e4"
+obs, reward, terminated, truncated, info = env.step(uci_action)
+print("Played move:", uci_action)
+print("Updated Board FEN:", env.board.fen())
+
+env.close()
+```
+
+### Using Single Player Env
+
+```python
+from chess_gym.chess_env import SinglePlayerChess
+
+env = SinglePlayerChess(render_mode="rgb_array")
+obs, info = env.reset(player_starts=False)
+```
+
+### Chess 960
 There is also an environment for the Chess960 variant. You can add it modified the existing class as `ChessEnv(chess960=True)`
 
-Please note that the environment only supports `rgb_array` rendering. For `human` rendering please turn to the [HumanRenderingWrapper](https://gymnasium.farama.org/main/_modules/gymnasium/wrappers/human_rendering/). 
+<a href="https://ibb.co/dgLW9rH"><img src="images/envs.png" border="0"></a>
 
 ## Further Info
 This environment will return 0 reward until the game has reached a terminal state. In the case of a draw, it will still return 0 reward. Otherwise, the reward will be either 1 or -1, depending upon the winning player.
@@ -56,3 +95,16 @@ Here, `info` will be a dictionary containing the following information pertainin
 * [`halfmove_clock`](https://python-chess.readthedocs.io/en/latest/core.html#chess.Board.halfmove_clock): The number of half-moves since the last capture or pawn move.
 * [`promoted`](https://python-chess.readthedocs.io/en/latest/core.html#chess.Board.promoted): A bitmask of pieces that have been promoted.
 * [`ep_square`](https://python-chess.readthedocs.io/en/latest/core.html#chess.Board.ep_square): The potential en passant square on the third or sixth rank or `None`.
+* `available_actions`: vector of discrete actions pointing our which actions are available for the next move
+* `available_uci_actions`: vector of discrete uci actions pointing our which actions are available for the next move
+
+
+## License
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+## Contributing
+Contributions are welcome! Feel free to submit issues or pull requests.
+
+## Contact
+For any questions or support, please open an issue or reach out via email.
+

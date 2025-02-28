@@ -8,8 +8,8 @@ from enum import Enum
 import numpy as np
 
 from chess_gym.chess_config import BoardEncoding, PieceMaxOccurance, Pieces
-from chess_gym.spaces.action_space import ChessAction
-from chess_gym.spaces.utils import contains_fen, contains_one_hot, contains_piece_map, contains_rgb_array, fen2piece_map, piece_map2fen, piece_map2one_hot, piece_map2rgb
+from chess_gym.spaces_mod.action_space import ChessAction
+from chess_gym.spaces_mod.utils import contains_fen, contains_one_hot, contains_piece_map, contains_rgb_array, fen2piece_map, piece_map2fen, piece_map2one_hot, piece_map2rgb
 from PIL import Image
 
 class BoardSpace(Space):
